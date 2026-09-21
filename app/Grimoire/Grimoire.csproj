@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="../../Version.props" />
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Grimoire</AssemblyName>
+    <RootNamespace>Spellbook</RootNamespace>
+    <Product>Grimoire</Product>
+    <Description>Cast transforms on highlighted text, anywhere.</Description>
+    <Authors>lodestoner</Authors>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>grimoire.ico</ApplicationIcon>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
+    <PackageReference Include="Markdig" Version="0.45.0" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\recipes.ini" Link="Defaults\recipes.ini" LogicalName="Defaults.recipes.ini" />
+    <EmbeddedResource Include="..\..\style-prose.md" Link="Defaults\style-prose.md" LogicalName="Defaults.style-prose.md" />
+    <EmbeddedResource Include="..\..\style-code.md" Link="Defaults\style-code.md" LogicalName="Defaults.style-code.md" />
+    <EmbeddedResource Include="..\..\spells.ini" Link="Defaults\spells.ini" LogicalName="Defaults.spells.ini" />
+    <EmbeddedResource Include="..\..\snippets.ini" Link="Defaults\snippets.ini" LogicalName="Defaults.snippets.ini" />
+  </ItemGroup>
+
+</Project>

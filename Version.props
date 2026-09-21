@@ -1,0 +1,17 @@
+<Project>
+  <!-- Single version source. Numeric Windows versions are derived, never edited separately. -->
+  <PropertyGroup>
+    <GrimoireVersion>2.2.0-rc.1</GrimoireVersion>
+    <Version>$(GrimoireVersion)</Version>
+    <GrimoireWindowsVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(GrimoireVersion)', '-.*$', '')).0</GrimoireWindowsVersion>
+    <AssemblyVersion>$(GrimoireWindowsVersion)</AssemblyVersion>
+    <FileVersion>$(AssemblyVersion)</FileVersion>
+    <InformationalVersion>$(GrimoireVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+  <Target Name="ValidateGrimoireVersion" BeforeTargets="BeforeBuild">
+    <Error Condition="'$(Version)' != '$(GrimoireVersion)' Or '$(InformationalVersion)' != '$(GrimoireVersion)'" Text="Version override disagrees with Version.props." />
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(GrimoireVersion)', '^\d+\.\d+\.\d+-rc\.\d+$'))" Text="Source candidate version must be major.minor.patch-rc.number." />
+    <Error Condition="'$(FileVersion)' != '$(GrimoireWindowsVersion)' Or '$(AssemblyVersion)' != '$(GrimoireWindowsVersion)'" Text="Windows file and assembly versions must match." />
+  </Target>
+</Project>

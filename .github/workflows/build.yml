@@ -1,0 +1,146 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: false
+        default: ''
+
+concurrency:
+  group: grimoire-source-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Validate SDK and application version
+        shell: pwsh
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: ./build.ps1 -SkipInstaller -ValidateOnly -Version $env:REQUESTED_VERSION
+
+      - name: Restore locked dependencies
+        shell: pwsh
+        run: |
+          dotnet restore app/Grimoire/Grimoire.csproj --locked-mode --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet restore tests/Grimoire.Tests/Grimoire.Tests.csproj --locked-mode --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build application and regression runner
+        shell: pwsh
+        run: |
+          dotnet build app/Grimoire/Grimoire.csproj -c Release --no-restore --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build tests/Grimoire.Tests/Grimoire.Tests.csproj -c Release --no-restore --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run synthetic Windows regressions
+        shell: pwsh
+        run: dotnet run --project tests/Grimoire.Tests/Grimoire.Tests.csproj -c Release --no-build -- --report test-results/windows-regression.txt
+
+      - name: Run privacy regressions
+        shell: pwsh
+        run: python -m unittest discover -s tests/privacy-audit
+
+      - name: Audit source privacy
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force test-results | Out-Null
+          python scripts/audit-privacy.py *> test-results/privacy-audit.txt
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content test-results/privacy-audit.txt
+            exit $LASTEXITCODE
+          }
+          Get-Content test-results/privacy-audit.txt
+
+      - name: Report vulnerable dependencies
+        shell: pwsh
+        run: |
+          dotnet list app/Grimoire/Grimoire.csproj package --vulnerable --include-transitive --format json --no-restore > test-results/dependency-vulnerabilities.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $report = Get-Content test-results/dependency-vulnerabilities.json -Raw | ConvertFrom-Json
+          $vulnerable = @(
+            foreach ($project in @($report.projects)) {
+              foreach ($framework in @($project.frameworks | Where-Object { $null -ne $_ })) {
+                @($framework.topLevelPackages) + @($framework.transitivePackages) |
+                  Where-Object { $null -ne $_ -and $null -ne $_.vulnerabilities -and @($_.vulnerabilities).Count -gt 0 }
+              }
+            }
+          )
+          if ($vulnerable.Count -gt 0) {
+            Write-Error "NuGet reported $($vulnerable.Count) vulnerable package(s); see the uploaded dependency report."
+            exit 1
+          }
+
+      - name: Install the pinned Inno Setup compiler
+        shell: pwsh
+        run: |
+          # The hosted image ships an older Inno Setup 6 whose Pascal compiler has no NativeInt,
+          # so always install the pinned version rather than accepting whatever is present.
+          choco upgrade innosetup --version 6.7.1 -y --no-progress --allow-downgrade
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and audit source candidate locally
+        shell: pwsh
+        run: |
+          ./build.ps1 *> test-results/package-build.txt
+          if ($LASTEXITCODE -ne 0) { Get-Content test-results/package-build.txt; exit $LASTEXITCODE }
+          Get-Content test-results/package-build.txt
+
+      - name: Test disposable install, lifecycle and uninstall
+        shell: pwsh
+        run: |
+          $installer = @(Get-ChildItem dist/candidate/Grimoire-Setup-*.exe)
+          if ($installer.Count -ne 1) { throw 'Expected exactly one candidate installer.' }
+          ./scripts/test-install.ps1 -Installer $installer[0].FullName -LifecycleSmoke
+
+      - name: Scan exact candidate with Defender when available
+        shell: pwsh
+        run: ./scripts/scan-candidate.ps1 -Directory dist/candidate
+
+      - name: Recheck final candidate hashes and archive contents
+        shell: pwsh
+        run: |
+          $version = (Get-Content dist/candidate/build-manifest.json -Raw | ConvertFrom-Json).version
+          python scripts/audit-package.py --candidate dist/candidate --staging dist/audit --version $version *> test-results/package-audit.txt
+          if ($LASTEXITCODE -ne 0) { Get-Content test-results/package-audit.txt; exit $LASTEXITCODE }
+          Get-Content test-results/package-audit.txt
+          Copy-Item dist/candidate/build-manifest.json, dist/candidate/SHA256SUMS.txt test-results/
+
+      - name: Upload synthetic test and audit logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Grimoire-source-build-evidence-${{ github.sha }}
+          path: |
+            test-results/windows-regression.txt
+            test-results/privacy-audit.txt
+            test-results/dependency-vulnerabilities.json
+            test-results/package-build.txt
+            test-results/install-tests.txt
+            test-results/defender.txt
+            test-results/package-audit.txt
+          if-no-files-found: warn
+          retention-days: 7

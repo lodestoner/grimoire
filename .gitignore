@@ -1,0 +1,32 @@
+# OS / editor cruft
+Thumbs.db
+desktop.ini
+.DS_Store
+*.bak
+*.tmp
+*~
+
+# Local user data
+grimoire-settings.ini
+grimoire.log
+reminders/
+.env
+.env.*
+*.pfx
+*.p12
+*.pem
+*.key
+
+# .NET build output
+app/**/bin/
+app/**/obj/
+tests/**/bin/
+tests/**/obj/
+dist/
+test-results/
+.superpowers/
+.worktrees/
+
+# Python cache
+__pycache__/
+*.pyc
